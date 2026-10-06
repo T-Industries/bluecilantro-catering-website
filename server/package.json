@@ -1,0 +1,27 @@
+{
+  "name": "bluecilantro-catering-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env src/index.js",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "db:push": "prisma db push",
+    "db:seed": "node --env-file-if-exists=.env prisma/seed.js",
+    "db:reset": "prisma db push --force-reset && node --env-file-if-exists=.env prisma/seed.js",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "db:migrate-sqlite": "node --env-file-if-exists=.env scripts/migrate-sqlite-to-postgres.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "jose": "^6.2.12",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}

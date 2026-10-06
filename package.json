@@ -1,0 +1,19 @@
+{
+  "name": "bluecilantro-catering-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BlueCilantro Catering \u2014 multi-restaurant catering ordering (React + Express)",
+  "scripts": {
+    "setup": "npm install && npm --prefix server install && npm --prefix client install && npm --prefix server run db:push && npm --prefix server run db:seed",
+    "dev": "concurrently -n api,web -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "db:seed": "npm --prefix server run db:seed",
+    "db:reset": "npm --prefix server run db:reset",
+    "db:up": "docker compose up -d"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  },
+  "type": "module"
+}

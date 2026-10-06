@@ -1,0 +1,163 @@
+generator client {
+  provider      = "prisma-client-js"
+  // "native" for local machines; rhel-openssl-3.0.x is the Linux runtime used by Vercel
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+// PostgreSQL everywhere: Neon in production, docker-compose locally.
+// DATABASE_URL = connection used by the app (Neon: the *pooled* URL).
+// DIRECT_URL   = direct (unpooled) connection used by `prisma db push` / migrations.
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Restaurant {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  name            String
+  tagline         String?
+  cuisine         String?  // comma-separated tags, e.g. "Pub Classics, Buffets"
+  description     String?
+  logoUrl         String?  @map("logo_url")
+  heroUrl         String?  @map("hero_url")
+  address         String?
+  contactName     String?  @map("contact_name")
+  contactPhone    String?  @map("contact_phone")
+  contactEmail    String?  @map("contact_email")
+  // Who receives new-order notifications (falls back to OPS_NOTIFY_* env vars when blank)
+  notifyEmail     String?  @map("notify_email")
+  notifyPhone     String?  @map("notify_phone")
+  minGuests       Int      @default(1) @map("min_guests")
+  leadTimeHours   Int      @default(48) @map("lead_time_hours")
+  taxPercent      Float    @default(5) @map("tax_percent")
+  gratuityPercent Float    @default(0) @map("gratuity_percent")
+  deliveryFee     Float    @default(0) @map("delivery_fee")
+  pickupAvailable Boolean  @default(true) @map("pickup_available")
+  pricingNote     String?  @map("pricing_note") // shown at checkout, e.g. staffing/gratuity rules
+  terms           String?  // conditions of catering (multi-line)
+  active          Boolean  @default(true)
+  displayOrder    Int      @default(0) @map("display_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  categories MenuCategory[]
+  orders     Order[]
+  admins     AdminUser[]
+
+  @@map("restaurants")
+}
+
+model MenuCategory {
+  id           String     @id @default(uuid())
+  restaurantId String     @map("restaurant_id")
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  imageUrl     String?    @map("image_url") // banner photo shown above the section
+  displayOrder Int        @default(0) @map("display_order")
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  items        MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id           String       @id @default(uuid())
+  categoryId   String       @map("category_id")
+  category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  // per_person | per_unit | per_lb | fixed | quote  (see shared/pricing.js)
+  pricingType  String       @default("per_person") @map("pricing_type")
+  price        Float?
+  unitLabel    String?      @map("unit_label") // each, dozen, hour, platter...
+  minQty       Int          @default(1) @map("min_qty")
+  step         Int          @default(1)
+  serves       String?      // e.g. "Serves 10-12"
+  variants     String       @default("[]") // JSON: [{ name, price }]
+  optionGroups String       @default("[]") @map("option_groups") // JSON: [{ name, min, max, choices: [{ name, price?, description? }] }]
+  tags         String?      // comma-separated: GF, V, Seasonal...
+  badge        String?
+  imageUrl     String?      @map("image_url")
+  active       Boolean      @default(true)
+  displayOrder Int          @default(0) @map("display_order")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  orderItems   OrderItem[]
+
+  @@map("menu_items")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique @map("order_number")
+  restaurantId    String      @map("restaurant_id")
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id])
+  // new | confirmed | completed | cancelled
+  status          String      @default("new")
+  customerName    String      @map("customer_name")
+  customerEmail   String      @map("customer_email")
+  customerPhone   String      @map("customer_phone")
+  company         String?
+  fulfillmentType String      @map("fulfillment_type") // delivery | pickup
+  address         String?
+  eventDate       String      @map("event_date") // YYYY-MM-DD
+  eventTime       String      @map("event_time") // HH:mm
+  guestCount      Int         @map("guest_count")
+  notes           String?
+  subtotal        Float
+  deliveryFee     Float       @default(0) @map("delivery_fee")
+  gratuity        Float       @default(0)
+  tax             Float       @default(0)
+  total           Float
+  hasQuoteItems   Boolean     @default(false) @map("has_quote_items")
+  adminNotes      String?     @map("admin_notes")
+  notificationLog String      @default("[]") @map("notification_log") // JSON array of send results
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  items           OrderItem[]
+
+  @@index([restaurantId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String    @id @default(uuid())
+  orderId     String    @map("order_id")
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId  String?   @map("menu_item_id")
+  menuItem    MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  // Snapshot at order time so later menu edits don't change past orders
+  itemName    String    @map("item_name")
+  pricingType String    @map("pricing_type")
+  unitLabel   String?   @map("unit_label")
+  variant     String?
+  options     String    @default("{}") // JSON: { groupName: [choice, ...] }
+  summary     String?   // human-readable selection summary
+  quantity    Int
+  unitPrice   Float     @map("unit_price")
+  lineTotal   Float     @map("line_total")
+  notes       String?
+
+  @@map("order_items")
+}
+
+model AdminUser {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  name         String?
+  passwordHash String      @map("password_hash")
+  // super = BlueCilantro staff (all restaurants); restaurant = one restaurant only
+  role         String      @default("restaurant")
+  restaurantId String?     @map("restaurant_id")
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}

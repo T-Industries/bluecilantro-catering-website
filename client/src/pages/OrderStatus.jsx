@@ -20,19 +20,18 @@ export function formatEvent(order) {
   return d.toLocaleString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 
-export function TrackForm({ initialNumber = '', initialEmail = '', error }) {
+export function TrackForm({ initialNumber = '', error }) {
   const [number, setNumber] = useState(initialNumber)
-  const [email, setEmail] = useState(initialEmail)
   const navigate = useNavigate()
   return (
     <div className="mx-auto max-w-md px-4 py-16">
       <h1 className="font-display text-3xl">Track your order</h1>
-      <p className="mt-2 text-slate-600">Enter your order number and the email you used at checkout.</p>
+      <p className="mt-2 text-slate-600">Enter the order number from your confirmation email or SMS.</p>
       <form
         className="card mt-6 space-y-4 p-6"
         onSubmit={(e) => {
           e.preventDefault()
-          navigate(`/order/${number.trim().toUpperCase()}?email=${encodeURIComponent(email.trim())}`)
+          navigate(`/order/${encodeURIComponent(number.trim().toUpperCase())}`)
         }}
       >
         {error && <ErrorBox>{error}</ErrorBox>}
@@ -41,12 +40,6 @@ export function TrackForm({ initialNumber = '', initialEmail = '', error }) {
             Order number
           </label>
           <input id="num" required className="input uppercase" placeholder="BC-XXXXXX" value={number} onChange={(e) => setNumber(e.target.value)} />
-        </div>
-        <div>
-          <label className="label" htmlFor="em">
-            Email
-          </label>
-          <input id="em" type="email" required className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <button className="btn-primary w-full py-3">Find my order</button>
       </form>
@@ -63,15 +56,16 @@ export default function OrderStatus() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!email) return
     setOrder(null)
     setError('')
-    api(`/orders/${encodeURIComponent(orderNumber)}?email=${encodeURIComponent(email)}`)
+    // The email (added automatically after checkout) unlocks the customer's full details.
+    const query = email ? `?email=${encodeURIComponent(email)}` : ''
+    api(`/orders/${encodeURIComponent(orderNumber)}${query}`)
       .then(setOrder)
-      .catch((e) => setError(e.status === 404 ? 'We couldn’t find an order with that number and email.' : e.message))
+      .catch((e) => setError(e.status === 404 ? 'We couldn’t find an order with that number. Please check it and try again.' : e.message))
   }, [orderNumber, email])
 
-  if (!email || error) return <TrackForm initialNumber={orderNumber} initialEmail={email} error={error} />
+  if (error) return <TrackForm initialNumber={orderNumber} error={error} />
   if (!order) return <PageLoader />
 
   const status = STATUS[order.status] || STATUS.new
@@ -118,7 +112,9 @@ export default function OrderStatus() {
             </div>
             <div>
               <dt className="text-slate-500">{order.fulfillmentType === 'delivery' ? 'Delivery to' : 'Fulfillment'}</dt>
-              <dd className="font-semibold">{order.fulfillmentType === 'delivery' ? order.address : 'Pickup'}</dd>
+              <dd className="font-semibold">
+                {order.fulfillmentType === 'delivery' ? order.address || <span className="font-normal text-slate-500">Hidden for privacy</span> : 'Pickup'}
+              </dd>
             </div>
           </dl>
 

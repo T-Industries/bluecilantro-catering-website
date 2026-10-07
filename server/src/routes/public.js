@@ -185,17 +185,40 @@ publicRouter.post('/orders', async (req, res) => {
   res.status(201).json({ orderNumber: order.orderNumber, email: order.customerEmail })
 })
 
-// Order lookup for the confirmation/tracking page. Requires the customer's email.
+const maskEmail = (email) => {
+  const [user, domain] = email.split('@')
+  return `${user.slice(0, 1)}${'•'.repeat(Math.max(2, user.length - 1))}@${domain}`
+}
+const maskPhone = (phone) => `•••-•••-${phone.replace(/\D/g, '').slice(-4)}`
+
+// Order lookup for the confirmation/tracking page.
+// Order number alone shows status, items and totals; the customer's personal details
+// (surname, email, phone, address, notes) are only included when the matching email is
+// also given — which the checkout confirmation page does automatically.
 publicRouter.get('/orders/:orderNumber', async (req, res) => {
+  if (rateLimited(`lookup:${req.ip}`, 30)) return res.status(429).json({ error: 'Too many lookups. Please try again later.' })
   const email = String(req.query.email || '').trim().toLowerCase()
   const order = await prisma.order.findUnique({
-    where: { orderNumber: req.params.orderNumber.toUpperCase() },
+    where: { orderNumber: req.params.orderNumber.trim().toUpperCase() },
     include: { items: true, restaurant: true },
   })
-  if (!order || !email || order.customerEmail !== email) return res.status(404).json({ error: 'Order not found' })
+  if (!order) return res.status(404).json({ error: 'Order not found' })
   const { notificationLog, adminNotes, restaurant, ...rest } = serializeOrder(order)
+  const verified = Boolean(email) && order.customerEmail === email
+  const personal = verified
+    ? {}
+    : {
+        customerName: order.customerName.split(' ')[0],
+        customerEmail: maskEmail(order.customerEmail),
+        customerPhone: maskPhone(order.customerPhone),
+        company: null,
+        address: null,
+        notes: null,
+      }
   res.json({
     ...rest,
+    ...personal,
+    detailsHidden: !verified,
     restaurant: { name: restaurant.name, slug: restaurant.slug, logoUrl: restaurant.logoUrl, contactPhone: restaurant.contactPhone, contactEmail: restaurant.contactEmail, pricingNote: restaurant.pricingNote },
   })
 })

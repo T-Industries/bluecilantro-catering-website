@@ -156,6 +156,8 @@ export default function Restaurant() {
   const [toast, setToast] = useState('')
   const cart = useCart()
   const tabsRef = useRef(null)
+  const clickedTabRef = useRef(null)
+  const stickyBarRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -186,29 +188,53 @@ export default function Restaurant() {
     return [...list, ...cats.filter((c) => c.items.length)]
   }, [restaurant, query])
 
+  // Where a section's top should sit when it is "current": just below the sticky tab bar.
+  // Uses the bar's *stuck* position (its CSS top + height), which is correct even before
+  // the page has scrolled far enough for the bar to stick.
+  const sectionAnchor = () => {
+    const bar = stickyBarRef.current
+    if (!bar) return 160
+    return (parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight + 16
+  }
+
   // Highlight the tab of the last section whose top has scrolled past the sticky tab bar.
+  // After a tab click the clicked tab stays selected until the user scrolls themselves
+  // (the last sections of a short menu can't always reach the top of the screen).
   useEffect(() => {
     if (!sections.length) return
-    let frame = 0
     const update = () => {
-      frame = 0
-      const offset = (tabsRef.current?.getBoundingClientRect().bottom ?? 150) + 24
+      if (clickedTabRef.current) return
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+      const els = [...document.querySelectorAll('[data-cat]')]
       let current = sections[0].id
-      for (const el of document.querySelectorAll('[data-cat]')) {
-        if (el.getBoundingClientRect().top <= offset) current = el.dataset.cat
+      if (atBottom && els.length) current = els[els.length - 1].dataset.cat
+      else {
+        const offset = sectionAnchor() + 24 // small tolerance for rounding
+        for (const el of els) if (el.getBoundingClientRect().top <= offset) current = el.dataset.cat
       }
       setActiveCat(current)
     }
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(update)
+    const releaseClick = () => {
+      clickedTabRef.current = null
     }
     update()
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', update, { passive: true })
+    const userInputs = ['wheel', 'touchstart', 'keydown', 'mousedown']
+    userInputs.forEach((e) => window.addEventListener(e, releaseClick, { passive: true }))
     return () => {
-      window.removeEventListener('scroll', onScroll)
-      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', update)
+      userInputs.forEach((e) => window.removeEventListener(e, releaseClick))
     }
   }, [sections])
+
+  const goToSection = (e, id) => {
+    e.preventDefault()
+    const el = document.getElementById(`cat-${id}`)
+    if (!el) return
+    setActiveCat(id)
+    clickedTabRef.current = id
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - sectionAnchor(), behavior: 'smooth' })
+  }
 
   useEffect(() => {
     if (!activeCat || !tabsRef.current) return
@@ -270,13 +296,14 @@ export default function Restaurant() {
               </div>
             )}
 
-            <div className="sticky top-20 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:top-28 sm:px-6">
+            <div ref={stickyBarRef} className="sticky top-20 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:top-28 sm:px-6">
               <nav ref={tabsRef} className="no-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto" aria-label="Menu categories">
                 {sections.map((c) => (
                   <a
                     key={c.id}
                     href={`#cat-${c.id}`}
                     data-tab={c.id}
+                    onClick={(e) => goToSection(e, c.id)}
                     className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${activeCat === c.id ? 'border border-slate-800 text-slate-900' : 'border border-transparent text-slate-600 hover:text-slate-900'}`}
                   >
                     {c.tab || c.name}

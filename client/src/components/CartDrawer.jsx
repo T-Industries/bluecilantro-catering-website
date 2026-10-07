@@ -79,7 +79,7 @@ export default function CartDrawer() {
         role="dialog"
         aria-label="Your cart"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5 sm:px-8">
           <h2 className="text-lg font-bold">Your catering order</h2>
           <CloseButton onClick={closeDrawer} />
         </div>
@@ -95,7 +95,7 @@ export default function CartDrawer() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-6 py-3 sm:px-8">
               <img src={restaurant.logoUrl} alt="" className="h-9 w-14 rounded-lg bg-white object-contain p-1 ring-1 ring-slate-200" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{restaurant.name}</p>
@@ -104,12 +104,12 @@ export default function CartDrawer() {
                 </Link>
               </div>
             </div>
-            <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto px-5">
+            <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto px-6 sm:px-8">
               {lines.map((line) => (
                 <CartLine key={line.key} line={line} />
               ))}
             </ul>
-            <div className="border-t border-slate-200 p-5">
+            <div className="border-t border-slate-200 px-6 py-5 sm:px-8 sm:py-6">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Subtotal</span>
                 <span className="font-semibold">{formatMoney(totals.subtotal)}</span>

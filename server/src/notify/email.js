@@ -9,9 +9,8 @@ export async function sendEmail({ to, subject, text, html, replyTo }) {
     return { channel: 'email', to: recipients.join(', '), ok: true, simulated: true }
   }
 
-  const sender = SMTP2GO_SENDER_NAME
-    ? `${SMTP2GO_SENDER_NAME} <${SMTP2GO_SENDER_EMAIL}>`
-    : SMTP2GO_SENDER_EMAIL || 'orders@bluecilantro.ca'
+  const senderEmail = SMTP2GO_SENDER_EMAIL || 'catering@bluecilantro.ca'
+  const sender = SMTP2GO_SENDER_NAME ? `${SMTP2GO_SENDER_NAME} <${senderEmail}>` : senderEmail
 
   try {
     const res = await fetch('https://api.smtp2go.com/v3/email/send', {

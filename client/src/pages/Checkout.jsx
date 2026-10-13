@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { formatMoney, orderTotals, validateSelection } from '@shared/pricing.js'
+import { EMAIL_ERROR, PHONE_ERROR, isValidEmail, normalizePhone } from '@shared/validation.js'
 import { CartLine } from '../components/CartDrawer.jsx'
 import { ErrorBox } from '../components/ui.jsx'
 import { useCart } from '../context/CartContext.jsx'
@@ -69,8 +70,8 @@ export default function Checkout() {
   const validate = () => {
     const e = {}
     if (form.customerName.trim().length < 2) e.customerName = 'Please enter your full name'
-    if (!/^\S+@\S+\.\S+$/.test(form.customerEmail.trim())) e.customerEmail = 'Please enter a valid email'
-    if (form.customerPhone.replace(/\D/g, '').length < 10) e.customerPhone = 'Please enter a valid phone number'
+    if (!isValidEmail(form.customerEmail)) e.customerEmail = EMAIL_ERROR
+    if (!normalizePhone(form.customerPhone)) e.customerPhone = PHONE_ERROR
     if (form.fulfillmentType === 'delivery' && form.address.trim().length < 5) e.address = 'Please enter the delivery address'
     if (!form.eventDate) e.eventDate = 'Choose your event date'
     else if (new Date(`${form.eventDate}T${form.eventTime}`) < earliest) {
@@ -131,10 +132,43 @@ export default function Checkout() {
                 <input id="company" className="input" autoComplete="organization" value={form.company} onChange={set('company')} />
               </Field>
               <Field label="Email" id="email" error={fieldErrors.customerEmail}>
-                <input id="email" type="email" className="input" autoComplete="email" value={form.customerEmail} onChange={set('customerEmail')} />
+                <input
+                  id="email"
+                  type="email"
+                  className={`input ${fieldErrors.customerEmail ? 'border-red-400' : ''}`}
+                  autoComplete="email"
+                  maxLength={254}
+                  aria-invalid={Boolean(fieldErrors.customerEmail)}
+                  value={form.customerEmail}
+                  onChange={(e) => {
+                    set('customerEmail')(e)
+                    setFieldErrors((f) => ({ ...f, customerEmail: undefined }))
+                  }}
+                  onBlur={() => form.customerEmail && !isValidEmail(form.customerEmail) && setFieldErrors((f) => ({ ...f, customerEmail: EMAIL_ERROR }))}
+                />
               </Field>
               <Field label="Mobile phone" id="phone" error={fieldErrors.customerPhone}>
-                <input id="phone" type="tel" className="input" autoComplete="tel" placeholder="(780) 555-0123" value={form.customerPhone} onChange={set('customerPhone')} />
+                <input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  className={`input ${fieldErrors.customerPhone ? 'border-red-400' : ''}`}
+                  autoComplete="tel"
+                  placeholder="(780) 555-0123"
+                  maxLength={20}
+                  aria-invalid={Boolean(fieldErrors.customerPhone)}
+                  value={form.customerPhone}
+                  onChange={(e) => {
+                    set('customerPhone')(e)
+                    setFieldErrors((f) => ({ ...f, customerPhone: undefined }))
+                  }}
+                  onBlur={() => {
+                    if (!form.customerPhone) return
+                    const phone = normalizePhone(form.customerPhone)
+                    if (phone) setForm((f) => ({ ...f, customerPhone: phone.display }))
+                    else setFieldErrors((f) => ({ ...f, customerPhone: PHONE_ERROR }))
+                  }}
+                />
               </Field>
             </div>
             <p className="mt-3 text-xs text-slate-500">We’ll send your order confirmation and updates by email and SMS.</p>

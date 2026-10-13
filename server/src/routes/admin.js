@@ -4,6 +4,37 @@ import { z } from 'zod'
 import { canAccessRestaurant, clearSession, publicUser, requireAdmin, requireSuper, setSession } from '../auth.js'
 import { prisma, serializeItem, serializeOrder } from '../db.js'
 import { notifyNewOrder, notifyStatusChange } from '../notify/index.js'
+import { EMAIL_ERROR, PHONE_ERROR, isValidEmail, normalizePhone } from '../../../shared/validation.js'
+
+// Optional contact fields: empty/null allowed; otherwise must be valid. Phones are stored formatted.
+const optionalPhone = (label) =>
+  z
+    .string()
+    .trim()
+    .max(40)
+    .nullable()
+    .optional()
+    .refine((v) => !v || normalizePhone(v), `${label}: ${PHONE_ERROR}`)
+    .transform((v) => (v === undefined ? undefined : v ? normalizePhone(v).display : null))
+const optionalEmail = (label) =>
+  z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .optional()
+    .refine((v) => !v || isValidEmail(v), `${label}: ${EMAIL_ERROR}`)
+    .transform((v) => (v === undefined ? undefined : v || null))
+// Several notification emails may be entered, separated by commas.
+const optionalEmailList = (label) =>
+  z
+    .string()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v ? v.split(',').map((e) => e.trim()).filter(Boolean) : []))
+    .refine((list) => !list || list.every(isValidEmail), `${label}: ${EMAIL_ERROR} (separate several with commas)`)
+    .transform((list) => (list === undefined ? undefined : list.length ? list.join(', ') : null))
 
 export const adminRouter = Router()
 
@@ -14,7 +45,7 @@ function parse(schema, body, res) {
   const r = schema.safeParse(body)
   if (!r.success) {
     const i = r.error.issues[0]
-    res.status(400).json({ error: `${i.path.join('.') || 'Request'}: ${i.message}` })
+    res.status(400).json({ error: i.code === 'custom' ? i.message : `${i.path.join('.') || 'Request'}: ${i.message}` })
     return null
   }
   return r.data
@@ -184,10 +215,10 @@ const restaurantSchema = z.object({
   heroUrl: z.string().max(500).nullable().optional(),
   address: z.string().max(300).nullable().optional(),
   contactName: z.string().max(120).nullable().optional(),
-  contactPhone: z.string().max(40).nullable().optional(),
-  contactEmail: z.string().max(200).nullable().optional(),
-  notifyEmail: z.string().max(500).nullable().optional(),
-  notifyPhone: z.string().max(40).nullable().optional(),
+  contactPhone: optionalPhone('Contact phone'),
+  contactEmail: optionalEmail('Contact email'),
+  notifyEmail: optionalEmailList('Notification email'),
+  notifyPhone: optionalPhone('Notification mobile'),
   minGuests: z.coerce.number().int().min(1).max(10000).optional(),
   leadTimeHours: z.coerce.number().int().min(0).max(24 * 60).optional(),
   taxPercent: z.coerce.number().min(0).max(100).optional(),

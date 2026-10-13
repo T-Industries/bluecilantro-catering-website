@@ -5,6 +5,7 @@ import { describeSelection, lineTotal, orderTotals, unitPrice, validateSelection
 import { prisma, publicRestaurant, serializeItem, serializeOrder } from '../db.js'
 import { notifyNewOrder } from '../notify/index.js'
 import { eventInstant } from '../time.js'
+import { EMAIL_ERROR, PHONE_ERROR, isValidEmail, normalizePhone } from '../../../shared/validation.js'
 
 export const publicRouter = Router()
 
@@ -42,13 +43,13 @@ publicRouter.get('/restaurants/:slug', async (req, res) => {
 const orderSchema = z.object({
   restaurantId: z.string().min(1),
   customerName: z.string().trim().min(2).max(120),
-  customerEmail: z.string().trim().email().max(200),
+  customerEmail: z.string().trim().refine(isValidEmail, EMAIL_ERROR),
+  // Stored in one consistent format, e.g. "(780) 555-0123"
   customerPhone: z
     .string()
     .trim()
-    .min(7)
-    .max(30)
-    .refine((v) => v.replace(/\D/g, '').length >= 10, 'Enter a valid phone number'),
+    .refine((v) => normalizePhone(v), PHONE_ERROR)
+    .transform((v) => normalizePhone(v).display),
   company: z.string().trim().max(120).optional().or(z.literal('')),
   fulfillmentType: z.enum(['delivery', 'pickup']),
   address: z.string().trim().max(300).optional().or(z.literal('')),
@@ -93,7 +94,9 @@ publicRouter.post('/orders', async (req, res) => {
   const parsed = orderSchema.safeParse(req.body)
   if (!parsed.success) {
     const first = parsed.error.issues[0]
-    return res.status(400).json({ error: `${first.path.join('.') || 'Order'}: ${first.message}`, issues: parsed.error.issues })
+    // Our own rules (refine) have customer-friendly messages; prefix the field name for zod's built-in ones.
+    const message = first.code === 'custom' ? first.message : `${first.path.join('.') || 'Order'}: ${first.message}`
+    return res.status(400).json({ error: message, issues: parsed.error.issues })
   }
   const data = parsed.data
 

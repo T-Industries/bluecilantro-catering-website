@@ -1,17 +1,33 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+
+// Page scroll is locked while any modal is open. A counter (rather than saving and restoring
+// the previous value) keeps this correct when modals overlap and close in any order —
+// e.g. the item modal and the "Start a new order?" dialog closing together.
+let openModals = 0
+function lockScroll() {
+  openModals += 1
+  document.body.style.overflow = 'hidden'
+}
+function unlockScroll() {
+  openModals = Math.max(0, openModals - 1)
+  if (openModals === 0) document.body.style.overflow = ''
+}
 
 export function Modal({ open, onClose, children, size = 'md', labelledBy }) {
+  // Keep the latest onClose without re-running the lock effect on every render.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
-    const onKey = (e) => e.key === 'Escape' && onClose?.()
+    const onKey = (e) => e.key === 'Escape' && onCloseRef.current?.()
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockScroll()
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      unlockScroll()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
   const width = { sm: 'sm:max-w-md', md: 'sm:max-w-xl', lg: 'sm:max-w-3xl' }[size]
